@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 from groq import Groq
 import json
-import yfinance as yf
+import requests
 import os
 
 load_dotenv()
@@ -12,18 +12,18 @@ client = Groq(
 
 # ---------------- TOOLS ---------------- #
 
-def get_stock_price(symbol: str):
+def get_weather(city: str):
     try:
-        stock = yf.Ticker(symbol)
-        info = stock.info
+        url = f"https://wttr.in/{city}?format=%C+%t"
+        response = requests.get(url)
 
-        company = info.get("shortName", symbol)
-        price = info.get("currentPrice")
+        if response.status_code == 200:
+            return f"The weather in {city} is {response.text}"
 
-        return f"{company} ({symbol.upper()}) current price is ${price}"
+        return "Unable to fetch weather"
 
     except Exception as e:
-        return f"Error fetching stock data: {str(e)}"
+        return str(e)
 
 
 def calculate(expression: str):
@@ -31,11 +31,11 @@ def calculate(expression: str):
         result = eval(expression)
         return f"Result: {result}"
     except Exception as e:
-        return f"Calculation Error: {str(e)}"
+        return str(e)
 
 
 available_tools = {
-    "get_stock_price": get_stock_price,
+    "get_weather": get_weather,
     "calculate": calculate
 }
 
@@ -49,7 +49,7 @@ You work in:
 2. action
 3. output
 
-Always return valid JSON.
+Always return JSON only.
 
 Format:
 
@@ -62,52 +62,17 @@ Format:
 
 Available Tools:
 
-1. get_stock_price(symbol)
-   Returns current stock price.
-
+1. get_weather(city)
 2. calculate(expression)
-   Calculates mathematical expressions.
 
-Examples:
+Example:
 
-User: What is Apple's stock price?
+{"step":"plan","content":"User wants weather"}
 
-{
-    "step":"plan",
-    "content":"User wants stock information."
-}
+{"step":"action","function":"get_weather","input":"Hyderabad"}
 
-{
-    "step":"action",
-    "function":"get_stock_price",
-    "input":"AAPL"
-}
-
-{
-    "step":"output",
-    "content":"Stock information retrieved."
-}
-
-User: Calculate 25*8
-
-{
-    "step":"plan",
-    "content":"User wants a calculation."
-}
-
-{
-    "step":"action",
-    "function":"calculate",
-    "input":"25*8"
-}
-
-{
-    "step":"output",
-    "content":"Calculation completed."
-}
+{"step":"output","content":"Weather retrieved"}
 """
-
-# ---------------- CHAT HISTORY ---------------- #
 
 messages = [
     {
@@ -116,10 +81,8 @@ messages = [
     }
 ]
 
-print("📈 Groq Stock Market Agent Started")
+print("Groq Agent Started")
 print("Type 'exit' to quit")
-
-# ---------------- AGENT LOOP ---------------- #
 
 while True:
 
@@ -150,23 +113,20 @@ while True:
 
         parsed_response = json.loads(assistant_message)
 
-        # PLAN
         if parsed_response.get("step") == "plan":
 
             print(
-                f"🧠 PLAN: {parsed_response.get('content')}"
+                f"PLAN: {parsed_response.get('content')}"
             )
-
             continue
 
-        # ACTION
         elif parsed_response.get("step") == "action":
 
             tool_name = parsed_response.get("function")
             tool_input = parsed_response.get("input")
 
             print(
-                f"🛠 ACTION: Calling {tool_name}({tool_input})"
+                f"ACTION: {tool_name}({tool_input})"
             )
 
             if tool_name in available_tools:
@@ -174,7 +134,7 @@ while True:
                 output = available_tools[tool_name](tool_input)
 
                 print(
-                    f"👀 OBSERVE: {output}"
+                    f"OBSERVE: {output}"
                 )
 
                 messages.append({
@@ -187,16 +147,10 @@ while True:
 
                 continue
 
-            else:
-
-                print("❌ Tool not found")
-                break
-
-        # OUTPUT
         elif parsed_response.get("step") == "output":
 
             print(
-                f"🤖 OUTPUT: {parsed_response.get('content')}"
+                f"OUTPUT: {parsed_response.get('content')}"
             )
 
             break
